@@ -3,14 +3,39 @@ package com.example.reactordemo;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import reactor.util.function.Tuple2;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 @SpringBootTest
 class ReactorDemoApplicationTests {
+
+    class Player {
+        private String firstName;
+        private String lastName;
+
+        Player(String firstName, String lastName) {
+            this.firstName = firstName;
+            this.lastName = lastName;
+        }
+
+        @Override
+        public boolean equals(Object player) {
+            if(!(player instanceof Player))
+                return false;
+
+            Player playerObj = (Player) player;
+            return this.firstName.equals(playerObj.firstName) &&
+                    this.lastName.equals(playerObj.lastName);
+        }
+    }
 
     @Test
     void createFlux() {
@@ -160,6 +185,86 @@ class ReactorDemoApplicationTests {
                 .expectNext("Dojacat")
                 .expectNext("Gucci")
                 .expectNext("Migos")
+                .verifyComplete();
+    }
+
+    @Test
+    void map() {
+        // map() -> sync (데이터 발행시 동기적으로 각 항목이 순차적으로 매핑됨)
+        Flux<Player> playerFlux = Flux.just("Michael Jordan", "Scottie Pippen", "Steve Kerr")
+                .map(n -> {
+                    String[] split = n.split("\\s");
+                    return new Player(split[0], split[1]);
+                });
+
+        StepVerifier.create(playerFlux)
+                .expectNext(new Player("Michael", "Jordan"))
+                .expectNext(new Player("Scottie", "Pippen"))
+                .expectNext(new Player("Steve", "Kerr"))
+                .verifyComplete();
+    }
+
+    @Test
+    void flatMap() {
+        Flux<Player> playerFlux = Flux
+                .just("Michael Jordan", "Scottie Pippen", "Steve Kerr")
+                .flatMap(n -> Mono.just(n)
+                    .map(p -> {
+                        String[] split = p.split("\\s");
+                        return new Player(split[0], split[1]);
+                    })
+                .subscribeOn(Schedulers.parallel()) // map() 오퍼레이션이 병렬 스레드로 수행됨. 비동기적으로 병행 수행.
+                );
+
+        // flatMap()이나 subscribeOn()을 사용하면 다수의 병행 스레드에 작업을 분할하여 스트림의 처리량을 증가시킬 수 있다.
+        // 작업이 병행 수행되어 어떤 작업이 먼저 끝날지 순서가 보장이 되지 않음.
+
+        List<Player> playerList = Arrays.asList(
+                new Player("Michael", "Jordan"),
+                new Player("Scottie", "Pippen"),
+                new Player("Steve", "Kerr")
+        );
+
+        StepVerifier.create(playerFlux)
+                .expectNextMatches(playerList::contains)
+                .expectNextMatches(playerList::contains)
+                .expectNextMatches(playerList::contains)
+                .verifyComplete();
+    }
+
+    @Test
+    void buffer() {
+        Flux<String> fruitFlux = Flux.just("strawberry", "blueberry", "apple", "mellon", "banana");
+        Flux<List<String>> bufferedFlux = fruitFlux.buffer(3); // List<String>타입의 Flux 반환
+
+        StepVerifier.create(bufferedFlux)
+                .expectNext(Arrays.asList("strawberry", "blueberry", "apple"))
+                .expectNext(Arrays.asList("mellon", "banana"))
+                .verifyComplete();
+
+        Flux.just("strawberry", "blueberry", "apple", "mellon", "banana")
+                .buffer(3) // List<String>타입의 Flux 반환
+                .flatMap(x ->
+                        Flux.fromIterable(x) // List의 각 요소 타입(String)의 Flux 반환
+                        .map(String::toUpperCase)
+                        .subscribeOn(Schedulers.parallel())
+                        .log()
+                ).subscribe();
+    }
+
+    @Test
+    void collectMap() {
+        Flux<String> animalFlux = Flux.just("dog", "cat", "rabbit", "lion", "elephant");
+        Mono<Map<Character, String>> animalMapMono = animalFlux.collectMap(s -> s.charAt(0));
+
+        StepVerifier
+                .create(animalMapMono)
+                .expectNextMatches(map -> map.size() == 5 &&
+                        map.get('d').equals("dog") &&
+                        map.get('c').equals("cat") &&
+                        map.get('r').equals("rabbit") &&
+                        map.get('l').equals("lion") &&
+                        map.get('e').equals("elephant"))
                 .verifyComplete();
     }
 
