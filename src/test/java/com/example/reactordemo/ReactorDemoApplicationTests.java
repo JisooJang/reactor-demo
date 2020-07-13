@@ -151,7 +151,8 @@ class ReactorDemoApplicationTests {
 
     @Test
     void filterFlux() {
-        Flux<String> filterFlux = Flux.just("Kanye", "Joey", "Dojacat", "Gucci", "Migos", " ")
+        Flux<String> filterFlux = Flux.just("Kanye", "Joey", "Dojacat", "Gucci", "Migos", " ", "Joey")
+                .distinct()
                 .filter(s -> !s.contains(" "));
         StepVerifier.create(filterFlux)
                 .expectNext("Kanye")
