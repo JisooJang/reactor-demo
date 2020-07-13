@@ -1,6 +1,5 @@
 package com.example.reactordemo;
 
-import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
@@ -118,6 +117,48 @@ class ReactorDemoApplicationTests {
                 .expectNextMatches(p ->
                         p.getT1().equals("CCC") &&
                         p.getT2().equals("ccc"))
+                .verifyComplete();
+    }
+
+    @Test
+    void zipFluxToObject() {
+        Flux<String> characterFlux = Flux.just("blue", "pink", "white");
+        Flux<String> objFlux = Flux.just("sky", "dress", "tissue");
+
+        Flux<String> zippedFlux = Flux.zip(characterFlux, objFlux, (c, f) -> f + " matches " + c);
+
+        StepVerifier.create(zippedFlux)
+                .expectNext("sky matches blue")
+                .expectNext("dress matches pink")
+                .expectNext("tissue matches white")
+                .verifyComplete();
+    }
+
+    @Test
+    void firstFlux() {
+        Flux<String> slowFlux = Flux.just("Kanye West", "YG", "Young Thug")
+                .delaySubscription(Duration.ofMillis(100));
+        Flux<String> fastFlux = Flux.just("Joey bada$$", "Travis Scott", "Kendrick Lamar");
+
+        Flux<String> firstFlux = Flux.first(slowFlux, fastFlux);
+
+        StepVerifier.create(firstFlux)
+                .expectNext("Joey bada$$")
+                .expectNext("Travis Scott")
+                .expectNext("Kendrick Lamar")
+                .verifyComplete();
+    }
+
+    @Test
+    void filterFlux() {
+        Flux<String> filterFlux = Flux.just("Kanye", "Joey", "Dojacat", "Gucci", "Migos", " ")
+                .filter(s -> !s.contains(" "));
+        StepVerifier.create(filterFlux)
+                .expectNext("Kanye")
+                .expectNext("Joey")
+                .expectNext("Dojacat")
+                .expectNext("Gucci")
+                .expectNext("Migos")
                 .verifyComplete();
     }
 
